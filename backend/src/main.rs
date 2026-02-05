@@ -1,10 +1,12 @@
-use actix_web::{web, App, HttpServer, HttpResponse, get};
+use actix_web::{App, HttpResponse, HttpServer, get, middleware::Logger, web};
 use sqlx::sqlite::SqlitePool;
 
 mod config;
 mod errors;
+mod handlers;
 mod models;
 mod repository;
+mod services;
 
 #[get("/health")]
 async fn health() -> HttpResponse {
@@ -28,6 +30,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(pool.clone()))
             .service(health)
+            .configure(handlers::configure)
+            .wrap(Logger::new("%a | %r | %s").log_target("http_log"))
     })
     .bind((config.host.as_str(), config.port))?
     .run()
