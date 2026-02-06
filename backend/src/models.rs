@@ -39,6 +39,12 @@ pub struct AuthResponse {
     pub user: User,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
 // ============ Task ============
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
@@ -69,4 +75,12 @@ pub struct UpdateTaskRequest {
     pub status: Option<String>,
     pub assignee_id: Option<i64>,
     pub actual_hours: Option<f64>,
+}
+
+// ============ Auth ============
+
+#[derive(Debug, Clone)]
+pub struct AuthenticatedUser {
+    pub id: i64,
+    pub role: String,
 }

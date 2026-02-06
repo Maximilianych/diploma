@@ -161,3 +161,20 @@ pub async fn delete_task(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
     }
     Ok(())
 }
+
+pub async fn update_password(
+    pool: &SqlitePool,
+    user_id: i64,
+    new_password_hash: &str,
+) -> Result<(), AppError> {
+    let result = sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
+        .bind(new_password_hash)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("User not found".to_string()));
+    }
+    Ok(())
+}

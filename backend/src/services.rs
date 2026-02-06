@@ -1,7 +1,46 @@
 use sqlx::SqlitePool;
+use crate::auth;
 use crate::errors::AppError;
-use crate::models::{User, Task, CreateUserRequest, CreateTaskRequest, UpdateTaskRequest};
+use crate::models::{
+    AuthResponse, AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest,
+    CreateUserRequest, LoginRequest, Task, UpdateTaskRequest, User,
+};
 use crate::repository;
+
+// ============ Auth ============
+
+pub async fn login(
+    pool: &SqlitePool,
+    req: LoginRequest,
+    jwt_secret: &str,
+) -> Result<AuthResponse, AppError> {
+    let user = repository::get_user_by_email(pool, &req.email)
+        .await?
+        .ok_or(AppError::Unauthorized)?;
+
+    if !auth::verify_password(&req.password, &user.password_hash)? {
+        return Err(AppError::Unauthorized);
+    }
+
+    let token = auth::create_token(user.id, &user.role, jwt_secret)?;
+
+    Ok(AuthResponse { token, user })
+}
+
+pub async fn change_password(
+    pool: &SqlitePool,
+    user_id: i64,
+    req: ChangePasswordRequest,
+) -> Result<(), AppError> {
+    let user = repository::get_user_by_id(pool, user_id).await?;
+
+    if !auth::verify_password(&req.current_password, &user.password_hash)? {
+        return Err(AppError::BadRequest("Current password is incorrect".to_string()));
+    }
+
+    let new_hash = auth::hash_password(&req.new_password)?;
+    repository::update_password(pool, user_id, &new_hash).await
+}
 
 // ============ Users ============
 
@@ -9,9 +48,7 @@ pub async fn create_user(
     pool: &SqlitePool,
     req: CreateUserRequest,
 ) -> Result<User, AppError> {
-    // TODO: хеширование пароля
-    let password_hash = format!("hash_{}", req.password); // заглушка
-
+    let password_hash = auth::hash_password(&req.password)?;
     repository::create_user(pool, &req.email, &password_hash, &req.name, &req.role).await
 }
 
@@ -49,7 +86,6 @@ pub async fn update_task(
     id: i64,
     req: UpdateTaskRequest,
 ) -> Result<Task, AppError> {
-    // Валидация статуса
     if let Some(ref status) = req.status {
         if !["todo", "in_progress", "done"].contains(&status.as_str()) {
             return Err(AppError::BadRequest(

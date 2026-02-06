@@ -1,6 +1,7 @@
 use actix_web::{App, HttpResponse, HttpServer, get, middleware::Logger, web};
 use sqlx::sqlite::SqlitePool;
 
+mod auth;
 mod config;
 mod errors;
 mod handlers;
@@ -8,7 +9,6 @@ mod models;
 mod repository;
 mod services;
 
-#[get("/health")]
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }
@@ -26,10 +26,13 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("Starting server at http://{}:{}", config.host, config.port);
 
+    let config_data = config.clone();
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(pool.clone()))
-            .service(health)
+            .app_data(web::Data::new(config_data.clone()))
+            .route("/health", web::get().to(health))
             .configure(handlers::configure)
             .wrap(Logger::new("%a | %r | %s").log_target("http_log"))
     })
