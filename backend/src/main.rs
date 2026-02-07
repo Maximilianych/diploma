@@ -1,4 +1,4 @@
-use actix_web::{App, HttpResponse, HttpServer, get, middleware::Logger, web};
+use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, web};
 use sqlx::sqlite::SqlitePool;
 
 mod auth;
@@ -23,6 +23,11 @@ async fn main() -> std::io::Result<()> {
     let pool = SqlitePool::connect(&config.database_url)
         .await
         .expect("Failed to connect to database");
+
+    // Initialize admin at the first run
+    services::init_admin(&pool, &config.admin_email, &config.admin_password)
+        .await
+        .expect("Failed to initialize admin");
 
     tracing::info!("Starting server at http://{}:{}", config.host, config.port);
 

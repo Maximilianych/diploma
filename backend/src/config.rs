@@ -4,7 +4,9 @@ pub struct Config {
     pub jwt_secret: String,
     pub host: String,
     pub port: u16,
-    pub ml_service_url: String
+    pub ml_service_url: String,
+    pub admin_email: String,
+    pub admin_password: String,
 }
 
 impl Config {
@@ -24,6 +26,10 @@ impl Config {
                 .expect("PORT must be a number"),
             ml_service_url: std::env::var("ML_SERVICE_URL")
                 .unwrap_or_else(|_| "http://localhost:8000".to_string()),
+            admin_email: std::env::var("ADMIN_EMAIL")
+                .unwrap_or_else(|_| "admin@example.com".to_string()),
+            admin_password: std::env::var("ADMIN_PASSWORD")
+                .unwrap_or_else(|_| "adminpass123".to_string()),
         }
     }
 }

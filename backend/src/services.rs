@@ -7,6 +7,29 @@ use crate::models::{
 };
 use crate::repository;
 
+// ============ Init ============
+
+pub async fn init_admin(
+    pool: &SqlitePool,
+    email: &str,
+    password: &str,
+) -> Result<(), AppError> {
+    let user_count = repository::count_users(pool).await?;
+    
+    if user_count > 0 {
+        tracing::info!("Database already has users, skipping admin creation");
+        return Ok(());
+    }
+
+    tracing::info!("Creating initial admin user: {}", email);
+    
+    let password_hash = auth::hash_password(password)?;
+    repository::create_user(pool, email, &password_hash, "Admin", "admin").await?;
+    
+    tracing::info!("Admin user created successfully");
+    Ok(())
+}
+
 // ============ Auth ============
 
 pub async fn login(
