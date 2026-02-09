@@ -1,9 +1,20 @@
-import http.server
-import socketserver
+from fastapi import FastAPI
+from pydantic import BaseModel
 
-PORT = 8000
-Handler = http.server.SimpleHTTPRequestHandler
+app = FastAPI(title="Task Time Predictor")
 
-print(f"ML Service starting on port {PORT}...")
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-    httpd.serve_forever()
+class PredictRequest(BaseModel):
+    title: str
+    description: str | None = None
+
+class PredictResponse(BaseModel):
+    predicted_hours: float
+
+@app.post("/predict", response_model=PredictResponse)
+async def predict(req: PredictRequest):
+    # Заглушка — всегда 0
+    return PredictResponse(predicted_hours=0.0)
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}

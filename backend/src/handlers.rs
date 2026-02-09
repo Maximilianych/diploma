@@ -1,6 +1,7 @@
 use crate::auth;
 use crate::config::Config;
 use crate::errors::AppError;
+use crate::ml_client::MlClient;
 use crate::models::{
     AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest, CreateUserRequest, LoginRequest,
     UpdateTaskRequest,
@@ -98,11 +99,18 @@ pub async fn get_user(
 pub async fn create_task(
     pool: web::Data<SqlitePool>,
     config: web::Data<Config>,
+    ml_client: web::Data<MlClient>,
     http_req: HttpRequest,
     req: web::Json<CreateTaskRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user = extract_user(&http_req, &config)?;
-    let task = services::create_task(pool.get_ref(), req.into_inner(), user.id).await?;
+    let task = services::create_task(
+        pool.get_ref(),
+        ml_client.get_ref(),
+        req.into_inner(),
+        user.id,
+    )
+    .await?;
     Ok(HttpResponse::Created().json(task))
 }
 

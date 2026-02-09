@@ -1,6 +1,7 @@
 use sqlx::SqlitePool;
 use crate::auth;
 use crate::errors::AppError;
+use crate::ml_client::MlClient;
 use crate::models::{
     AuthResponse, AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest,
     CreateUserRequest, LoginRequest, Task, UpdateTaskRequest, User,
@@ -15,7 +16,7 @@ pub async fn init_admin(
     password: &str,
 ) -> Result<(), AppError> {
     let user_count = repository::count_users(pool).await?;
-    
+
     if user_count > 0 {
         tracing::info!("Database already has users, skipping admin creation");
         return Ok(());
@@ -25,7 +26,7 @@ pub async fn init_admin(
     
     let password_hash = auth::hash_password(password)?;
     repository::create_user(pool, email, &password_hash, "Admin", "admin").await?;
-    
+
     tracing::info!("Admin user created successfully");
     Ok(())
 }
@@ -87,11 +88,13 @@ pub async fn get_user_by_id(pool: &SqlitePool, id: i64) -> Result<User, AppError
 
 pub async fn create_task(
     pool: &SqlitePool,
+    ml_client: &MlClient,
     req: CreateTaskRequest,
     created_by: i64,
 ) -> Result<Task, AppError> {
-    // TODO: вызов ML-сервиса
-    let predicted_hours: Option<f64> = None; // заглушка
+    let predicted_hours = ml_client
+        .predict_time_safe(&req.title, req.description.as_deref())
+        .await;
 
     repository::create_task(pool, &req, created_by, predicted_hours).await
 }
@@ -112,7 +115,7 @@ pub async fn update_task(
     if let Some(ref status) = req.status {
         if !["todo", "in_progress", "done"].contains(&status.as_str()) {
             return Err(AppError::BadRequest(
-                "Status must be: todo, in_progress, done".to_string()
+                "Status must be: todo, in_progress, done".to_string(),
             ));
         }
     }

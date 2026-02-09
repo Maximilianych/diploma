@@ -5,6 +5,7 @@ mod auth;
 mod config;
 mod errors;
 mod handlers;
+mod ml_client;
 mod models;
 mod repository;
 mod services;
@@ -24,11 +25,12 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to connect to database");
 
-    // Initialize admin at the first run
     services::init_admin(&pool, &config.admin_email, &config.admin_password)
         .await
         .expect("Failed to initialize admin");
 
+    let ml_client = ml_client::MlClient::new(config.ml_service_url.clone());
+        
     tracing::info!("Starting server at http://{}:{}", config.host, config.port);
 
     let config_data = config.clone();
@@ -37,6 +39,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(pool.clone()))
             .app_data(web::Data::new(config_data.clone()))
+            .app_data(web::Data::new(ml_client.clone()))
             .route("/health", web::get().to(health))
             .configure(handlers::configure)
             .wrap(Logger::new("%a | %r | %s").log_target("http_log"))
