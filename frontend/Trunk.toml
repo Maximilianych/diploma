@@ -1,0 +1,15 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+[watch]
+watch = ["src", "index.html", "input.css"]
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 3000
+
+[[hooks]]
+stage = "pre_build"
+command = "sh"
+command_arguments = ["-c", "npx @tailwindcss/cli -i input.css -o ./dist/output.css"]
