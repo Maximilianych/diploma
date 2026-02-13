@@ -3,7 +3,7 @@ use crate::auth;
 use crate::errors::AppError;
 use crate::ml_client::MlClient;
 use crate::models::{
-    AuthResponse, AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest,
+    AuthResponse, ChangePasswordRequest, CreateTaskRequest,
     CreateUserRequest, LoginRequest, Task, UpdateTaskRequest, User,
 };
 use crate::repository;
@@ -82,6 +82,10 @@ pub async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, AppError> {
 
 pub async fn get_user_by_id(pool: &SqlitePool, id: i64) -> Result<User, AppError> {
     repository::get_user_by_id(pool, id).await
+}
+
+pub async fn delete_user(pool: &SqlitePool, user_id: i64) -> Result<(), AppError> {
+    repository::delete_user(pool, user_id).await
 }
 
 // ============ Tasks ============

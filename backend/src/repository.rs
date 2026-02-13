@@ -65,6 +65,18 @@ pub async fn count_users(pool: &SqlitePool) -> Result<i64, AppError> {
     Ok(row.0)
 }
 
+pub async fn delete_user(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
+    let result = sqlx::query("DELETE FROM users WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("User not found".to_string()));
+    }
+    Ok(())
+}
+
 // ============ Tasks ============
 
 pub async fn create_task(

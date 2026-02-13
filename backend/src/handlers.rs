@@ -94,6 +94,35 @@ pub async fn get_user(
     Ok(HttpResponse::Ok().json(user))
 }
 
+pub async fn delete_user(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, AppError> {
+    let user = extract_user(&http_req, &config)?;
+    require_admin(&user)?;
+
+    let user_id = path.into_inner();
+
+    if user.id == user_id {
+        return Err(AppError::BadRequest("Cannot delete yourself".to_string()));
+    }
+
+    services::delete_user(pool.get_ref(), user_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn get_me(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let auth_user = extract_user(&http_req, &config)?;
+    let user = services::get_user_by_id(pool.get_ref(), auth_user.id).await?;
+    Ok(HttpResponse::Ok().json(user))
+}
+
 // ============ Tasks ============
 
 pub async fn create_task(
@@ -166,10 +195,12 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             // Auth
             .route("/login", web::post().to(login))
             .route("/change-password", web::post().to(change_password))
+            .route("/me", web::get().to(get_me))
             // Users
             .route("/users", web::post().to(create_user))
             .route("/users", web::get().to(get_all_users))
             .route("/users/{id}", web::get().to(get_user))
+            .route("/users/{id}", web::delete().to(delete_user))
             // Tasks
             .route("/tasks", web::post().to(create_task))
             .route("/tasks", web::get().to(get_all_tasks))
