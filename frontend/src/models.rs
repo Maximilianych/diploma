@@ -42,8 +42,8 @@ pub struct CreateTaskRequest {
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateTaskRequest {
     pub title: Option<String>,
-    pub description: Option<String>,
+    pub description: Option<Option<String>>,
     pub status: Option<String>,
-    pub assignee_id: Option<i64>,
+    pub assignee_id: Option<Option<i64>>,
     pub actual_hours: Option<f64>,
 }

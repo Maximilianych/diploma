@@ -142,6 +142,16 @@ pub async fn update_task(
 ) -> Result<Task, AppError> {
     let current = get_task_by_id(pool, id).await?;
 
+    let new_description = match &req.description {
+        Some(desc) => desc.clone(), // явно передано (может быть Some или None)
+        None => current.description,                 // не передано - оставляем старое
+    };
+
+    let new_assignee = match &req.assignee_id {
+        Some(id) => *id, // явно передано
+        None => current.assignee_id,   // не передано
+    };
+
     sqlx::query_as::<_, Task>(
         r#"
         UPDATE tasks
@@ -149,12 +159,12 @@ pub async fn update_task(
             assignee_id = ?, actual_hours = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         RETURNING *
-        "#,
+        "#
     )
     .bind(req.title.as_ref().unwrap_or(&current.title))
-    .bind(req.description.as_ref().or(current.description.as_ref()))
+    .bind(&new_description)
     .bind(req.status.as_ref().unwrap_or(&current.status))
-    .bind(req.assignee_id.or(current.assignee_id))
+    .bind(new_assignee)
     .bind(req.actual_hours.or(current.actual_hours))
     .bind(id)
     .fetch_one(pool)

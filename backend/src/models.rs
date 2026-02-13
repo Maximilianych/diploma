@@ -71,10 +71,21 @@ pub struct CreateTaskRequest {
 #[derive(Debug, Deserialize)]
 pub struct UpdateTaskRequest {
     pub title: Option<String>,
-    pub description: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_field")]
+    pub description: Option<Option<String>>,
     pub status: Option<String>,
-    pub assignee_id: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_optional_field")]
+    pub assignee_id: Option<Option<i64>>,
     pub actual_hours: Option<f64>,
+}
+
+// Позволяет различать отсутствие поля и явный null
+fn deserialize_optional_field<'de, T, D>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::deserialize(deserializer)?))
 }
 
 // ============ Auth ============

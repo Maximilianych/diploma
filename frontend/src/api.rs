@@ -54,7 +54,11 @@ pub async fn get_tasks() -> Result<Vec<Task>, String> {
     }
 }
 
-pub async fn create_task(title: String, description: Option<String>) -> Result<Task, String> {
+pub async fn create_task(
+    title: String,
+    description: Option<String>,
+    assignee_id: Option<i64>,
+) -> Result<Task, String> {
     let token = get_token().ok_or("Not authenticated")?;
 
     let response = client()
@@ -63,7 +67,7 @@ pub async fn create_task(title: String, description: Option<String>) -> Result<T
         .json(&CreateTaskRequest {
             title,
             description,
-            assignee_id: None,
+            assignee_id,
         })
         .send()
         .await
@@ -114,5 +118,57 @@ pub async fn delete_task(id: i64) -> Result<(), String> {
         Ok(())
     } else {
         Err("Failed to delete task".to_string())
+    }
+}
+
+pub async fn update_task(id: i64, req: UpdateTaskRequest) -> Result<Task, String> {
+    let token = get_token().ok_or("Not authenticated")?;
+
+    let response = client()
+        .put(format!("{}/tasks/{}", API_URL, id))
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&req)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if response.status().is_success() {
+        response.json().await.map_err(|e| e.to_string())
+    } else {
+        Err("Failed to update task".to_string())
+    }
+}
+
+pub async fn get_users() -> Result<Vec<User>, String> {
+    let token = get_token().ok_or("Not authenticated")?;
+
+    let response = client()
+        .get(format!("{}/users", API_URL))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if response.status().is_success() {
+        response.json().await.map_err(|e| e.to_string())
+    } else {
+        Err("Failed to fetch users".to_string())
+    }
+}
+
+pub async fn get_me() -> Result<User, String> {
+    let token = get_token().ok_or("Not authenticated")?;
+
+    let response = client()
+        .get(format!("{}/me", API_URL))
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if response.status().is_success() {
+        response.json().await.map_err(|e| e.to_string())
+    } else {
+        Err("Failed to fetch current user".to_string())
     }
 }
