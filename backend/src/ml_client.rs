@@ -10,13 +10,13 @@ pub struct MlClient {
 
 #[derive(Serialize)]
 struct PredictRequest {
-    title: String,
+    summary: String,
     description: Option<String>,
 }
 
 #[derive(Deserialize)]
 struct PredictResponse {
-    predicted_hours: f64,
+    predicted_seconds: i64,
 }
 
 impl MlClient {
@@ -31,9 +31,9 @@ impl MlClient {
         &self,
         title: &str,
         description: Option<&str>,
-    ) -> Result<f64, AppError> {
+    ) -> Result<i64, AppError> {
         let request = PredictRequest {
-            title: title.to_string(),
+            summary: title.to_string(),
             description: description.map(|s| s.to_string()),
         };
 
@@ -58,15 +58,14 @@ impl MlClient {
             AppError::Internal("Invalid ML response".to_string())
         })?;
 
-        Ok(result.predicted_hours)
+        Ok(result.predicted_seconds)
     }
 
-    /// Версия которая не падает при ошибке, просто возвращает None
     pub async fn predict_time_safe(
         &self,
         title: &str,
         description: Option<&str>,
-    ) -> Option<f64> {
+    ) -> Option<i64> {
         self.predict_time(title, description).await.ok()
     }
 }

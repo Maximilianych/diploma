@@ -1,6 +1,7 @@
-use crate::errors::AppError;
-use crate::models::{CreateTaskRequest, Task, UpdateTaskRequest, User};
 use sqlx::SqlitePool;
+use chrono::Utc;
+use crate::models::{User, Task, CreateTaskRequest, UpdateTaskRequest};
+use crate::errors::AppError;
 
 // ============ Users ============
 
@@ -16,7 +17,7 @@ pub async fn create_user(
         INSERT INTO users (email, password_hash, name, role)
         VALUES (?, ?, ?, ?)
         RETURNING *
-        "#,
+        "#
     )
     .bind(email)
     .bind(password_hash)
@@ -42,20 +43,16 @@ pub async fn get_user_by_id(pool: &SqlitePool, id: i64) -> Result<User, AppError
 }
 
 pub async fn get_user_by_email(pool: &SqlitePool, email: &str) -> Result<Option<User>, AppError> {
-    Ok(
-        sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = ?")
-            .bind(email)
-            .fetch_optional(pool)
-            .await?,
-    )
+    Ok(sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = ?")
+        .bind(email)
+        .fetch_optional(pool)
+        .await?)
 }
 
 pub async fn get_all_users(pool: &SqlitePool) -> Result<Vec<User>, AppError> {
-    Ok(
-        sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY created_at")
-            .fetch_all(pool)
-            .await?,
-    )
+    Ok(sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY created_at")
+        .fetch_all(pool)
+        .await?)
 }
 
 pub async fn count_users(pool: &SqlitePool) -> Result<i64, AppError> {
@@ -77,26 +74,43 @@ pub async fn delete_user(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
     Ok(())
 }
 
+pub async fn update_password(
+    pool: &SqlitePool,
+    user_id: i64,
+    new_password_hash: &str,
+) -> Result<(), AppError> {
+    let result = sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
+        .bind(new_password_hash)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("User not found".to_string()));
+    }
+    Ok(())
+}
+
 // ============ Tasks ============
 
 pub async fn create_task(
     pool: &SqlitePool,
     req: &CreateTaskRequest,
     created_by: i64,
-    predicted_hours: Option<f64>,
+    predicted_seconds: Option<i64>,
 ) -> Result<Task, AppError> {
     Ok(sqlx::query_as::<_, Task>(
         r#"
-        INSERT INTO tasks (title, description, assignee_id, created_by, predicted_hours)
+        INSERT INTO tasks (title, description, assignee_id, created_by, predicted_seconds)
         VALUES (?, ?, ?, ?, ?)
         RETURNING *
-        "#,
+        "#
     )
     .bind(&req.title)
     .bind(&req.description)
     .bind(req.assignee_id)
     .bind(created_by)
-    .bind(predicted_hours)
+    .bind(predicted_seconds)
     .fetch_one(pool)
     .await?)
 }
@@ -110,29 +124,23 @@ pub async fn get_task_by_id(pool: &SqlitePool, id: i64) -> Result<Task, AppError
 }
 
 pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, AppError> {
-    Ok(
-        sqlx::query_as::<_, Task>("SELECT * FROM tasks ORDER BY created_at DESC")
-            .fetch_all(pool)
-            .await?,
-    )
+    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks ORDER BY created_at DESC")
+        .fetch_all(pool)
+        .await?)
 }
 
 pub async fn get_tasks_by_status(pool: &SqlitePool, status: &str) -> Result<Vec<Task>, AppError> {
-    Ok(
-        sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC")
-            .bind(status)
-            .fetch_all(pool)
-            .await?,
-    )
+    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC")
+        .bind(status)
+        .fetch_all(pool)
+        .await?)
 }
 
 pub async fn get_tasks_by_assignee(pool: &SqlitePool, user_id: i64) -> Result<Vec<Task>, AppError> {
-    Ok(sqlx::query_as::<_, Task>(
-        "SELECT * FROM tasks WHERE assignee_id = ? ORDER BY created_at DESC",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?)
+    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE assignee_id = ? ORDER BY created_at DESC")
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?)
 }
 
 pub async fn update_task(
@@ -143,29 +151,47 @@ pub async fn update_task(
     let current = get_task_by_id(pool, id).await?;
 
     let new_description = match &req.description {
-        Some(desc) => desc.clone(), // явно передано (может быть Some или None)
-        None => current.description,                 // не передано - оставляем старое
+        Some(desc) => desc.clone(),
+        None => current.description,
     };
 
     let new_assignee = match &req.assignee_id {
-        Some(id) => *id, // явно передано
-        None => current.assignee_id,   // не передано
+        Some(id) => *id,
+        None => current.assignee_id,
+    };
+
+    let new_status = req.status.as_ref().unwrap_or(&current.status);
+    
+    // Конвертируем часы в секунды
+    let new_actual_seconds = req.actual_hours
+        .map(|h| (h * 3600.0) as i64)
+        .or(current.actual_spent_seconds);
+
+    // Устанавливаем completed_at при переходе в done
+    let new_completed_at = if new_status == "done" && current.status != "done" {
+        Some(Utc::now())
+    } else if new_status != "done" {
+        None
+    } else {
+        current.completed_at
     };
 
     sqlx::query_as::<_, Task>(
         r#"
         UPDATE tasks
         SET title = ?, description = ?, status = ?,
-            assignee_id = ?, actual_hours = ?, updated_at = CURRENT_TIMESTAMP
+            assignee_id = ?, actual_spent_seconds = ?, 
+            completed_at = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         RETURNING *
         "#
     )
     .bind(req.title.as_ref().unwrap_or(&current.title))
     .bind(&new_description)
-    .bind(req.status.as_ref().unwrap_or(&current.status))
+    .bind(new_status)
     .bind(new_assignee)
-    .bind(req.actual_hours.or(current.actual_hours))
+    .bind(new_actual_seconds)
+    .bind(new_completed_at)
     .bind(id)
     .fetch_one(pool)
     .await
@@ -180,23 +206,6 @@ pub async fn delete_task(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
 
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound("Task not found".to_string()));
-    }
-    Ok(())
-}
-
-pub async fn update_password(
-    pool: &SqlitePool,
-    user_id: i64,
-    new_password_hash: &str,
-) -> Result<(), AppError> {
-    let result = sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
-        .bind(new_password_hash)
-        .bind(user_id)
-        .execute(pool)
-        .await?;
-
-    if result.rows_affected() == 0 {
-        return Err(AppError::NotFound("User not found".to_string()));
     }
     Ok(())
 }

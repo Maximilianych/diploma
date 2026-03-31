@@ -4,7 +4,7 @@ use crate::errors::AppError;
 use crate::ml_client::MlClient;
 use crate::models::{
     AuthResponse, ChangePasswordRequest, CreateTaskRequest,
-    CreateUserRequest, LoginRequest, Task, UpdateTaskRequest, User,
+    CreateUserRequest, LoginRequest, TaskResponse, UpdateTaskRequest, User,
 };
 use crate::repository;
 
@@ -23,7 +23,7 @@ pub async fn init_admin(
     }
 
     tracing::info!("Creating initial admin user: {}", email);
-    
+
     let password_hash = auth::hash_password(password)?;
     repository::create_user(pool, email, &password_hash, "Admin", "admin").await?;
 
@@ -95,27 +95,31 @@ pub async fn create_task(
     ml_client: &MlClient,
     req: CreateTaskRequest,
     created_by: i64,
-) -> Result<Task, AppError> {
-    let predicted_hours = ml_client
+) -> Result<TaskResponse, AppError> {
+    // ML-сервис возвращает секунды
+    let predicted_seconds = ml_client
         .predict_time_safe(&req.title, req.description.as_deref())
         .await;
 
-    repository::create_task(pool, &req, created_by, predicted_hours).await
+    let task = repository::create_task(pool, &req, created_by, predicted_seconds).await?;
+    Ok(task.into())
 }
 
-pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, AppError> {
-    repository::get_all_tasks(pool).await
+pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskResponse>, AppError> {
+    let tasks = repository::get_all_tasks(pool).await?;
+    Ok(tasks.into_iter().map(|t| t.into()).collect())
 }
 
-pub async fn get_task_by_id(pool: &SqlitePool, id: i64) -> Result<Task, AppError> {
-    repository::get_task_by_id(pool, id).await
+pub async fn get_task_by_id(pool: &SqlitePool, id: i64) -> Result<TaskResponse, AppError> {
+    let task = repository::get_task_by_id(pool, id).await?;
+    Ok(task.into())
 }
 
 pub async fn update_task(
     pool: &SqlitePool,
     id: i64,
     req: UpdateTaskRequest,
-) -> Result<Task, AppError> {
+) -> Result<TaskResponse, AppError> {
     if let Some(ref status) = req.status {
         if !["todo", "in_progress", "done"].contains(&status.as_str()) {
             return Err(AppError::BadRequest(
@@ -124,7 +128,8 @@ pub async fn update_task(
         }
     }
 
-    repository::update_task(pool, id, &req).await
+    let task = repository::update_task(pool, id, &req).await?;
+    Ok(task.into())
 }
 
 pub async fn delete_task(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
