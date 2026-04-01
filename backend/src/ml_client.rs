@@ -16,7 +16,7 @@ struct PredictRequest {
 
 #[derive(Deserialize)]
 struct PredictResponse {
-    predicted_seconds: i64,
+    predicted_seconds: f64,
 }
 
 impl MlClient {
@@ -31,7 +31,7 @@ impl MlClient {
         &self,
         title: &str,
         description: Option<&str>,
-    ) -> Result<i64, AppError> {
+    ) -> Result<f64, AppError> {
         let request = PredictRequest {
             summary: title.to_string(),
             description: description.map(|s| s.to_string()),
@@ -65,7 +65,7 @@ impl MlClient {
         &self,
         title: &str,
         description: Option<&str>,
-    ) -> Option<i64> {
+    ) -> Option<f64> {
         self.predict_time(title, description).await.ok()
     }
 }

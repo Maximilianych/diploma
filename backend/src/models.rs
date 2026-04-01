@@ -53,15 +53,14 @@ pub struct Task {
     pub title: String,
     pub description: Option<String>,
     pub status: String,
-    pub predicted_seconds: Option<i64>,
-    pub actual_spent_seconds: Option<i64>,
+    pub predicted_seconds: Option<f64>,
+    pub actual_spent_seconds: Option<f64>,
     pub assignee_id: Option<i64>,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
 }
-
 // Ответ для фронтенда с часами
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskResponse {
@@ -85,8 +84,8 @@ impl From<Task> for TaskResponse {
             title: task.title,
             description: task.description,
             status: task.status,
-            predicted_hours: task.predicted_seconds.map(|s| s as f64 / 3600.0),
-            actual_hours: task.actual_spent_seconds.map(|s| s as f64 / 3600.0),
+            predicted_hours: task.predicted_seconds.map(|s| s / 3600.0),
+            actual_hours: task.actual_spent_seconds.map(|s| s / 3600.0),
             assignee_id: task.assignee_id,
             created_by: task.created_by,
             created_at: task.created_at,

@@ -97,7 +97,7 @@ pub async fn create_task(
     pool: &SqlitePool,
     req: &CreateTaskRequest,
     created_by: i64,
-    predicted_seconds: Option<i64>,
+    predicted_seconds: Option<f64>,
 ) -> Result<Task, AppError> {
     Ok(sqlx::query_as::<_, Task>(
         r#"
@@ -164,7 +164,7 @@ pub async fn update_task(
     
     // Конвертируем часы в секунды
     let new_actual_seconds = req.actual_hours
-        .map(|h| (h * 3600.0) as i64)
+        .map(|h| h * 3600.0)
         .or(current.actual_spent_seconds);
 
     // Устанавливаем completed_at при переходе в done
