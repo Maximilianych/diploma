@@ -1,0 +1,86 @@
+
+database:
+  url: "sqlite:///../backend/data.db"
+
+storage:
+  artifact_dir: "./artifacts"
+
+runtime:
+  mode: "production"             # production | evaluation
+  eval_target_project: "Sonatype"      # имя проекта для evaluation mode
+
+source_corpus:
+  enabled: true
+  table: "ml_source_tasks"
+  dataset_version: "v1"
+
+history:
+  history_months: 12
+  min_tasks_in_window: 100
+
+training:
+  min_tasks_for_retrain: 5
+  min_tasks_for_scratch: 5
+  min_tasks_for_full_selection: 50
+  validation_ratio: 0.2
+  test_ratio: 0.2               # только для evaluation
+  target_transform: "log1p"
+
+features:
+  summary:
+    analyzer: "word"
+    ngram_range: [1, 2]
+    max_features: 12000
+    min_df: 2
+    max_df: 0.95
+    sublinear_tf: true
+
+  description:
+    analyzer: "word"
+    ngram_range: [1, 2]
+    max_features: 30000
+    min_df: 2
+    max_df: 0.95
+    sublinear_tf: true
+
+  char:
+    analyzer: "char_wb"
+    ngram_range: [3, 5]
+    max_features: 20000
+    min_df: 2
+    max_df: 0.95
+    sublinear_tf: true
+
+scratch:
+  enabled: true
+  alpha_grid: [0.5, 1, 5, 10]
+  block_weight_grid:
+    - [1.0, 1.0, 1.0]
+    - [1.0, 2.0, 1.0]
+    - [1.0, 2.0, 2.0]
+    - [0.5, 1.0, 1.0]
+    - [0.5, 2.0, 1.0]
+    - [2.0, 2.0, 0.5]
+
+retrain:
+  enabled: true
+  alpha_grid: [5, 10, 50, 100]
+  target_share_grid: [0.5]
+  block_weight_grid:
+    - [1.0, 1.0, 1.0]
+    - [0.5, 1.0, 1.0]
+    - [0.5, 1.0, 2.0]
+    - [0.5, 2.0, 1.0]
+    - [0.5, 2.0, 2.0]
+    - [1.0, 2.0, 0.5]
+    - [1.0, 1.0, 0.5]
+
+selection:
+  primary_metric: "mdape"        # mdape | medae | r2
+  require_non_negative_r2: true
+  min_mdape_improvement_pp: 1.0
+  min_r2_improvement: 0.01
+
+prediction:
+  clamp_min_minutes: 5
+  round_minutes_to: 5
