@@ -1,6 +1,9 @@
 use sqlx::SqlitePool;
 use chrono::Utc;
-use crate::models::{User, Task, CreateTaskRequest, UpdateTaskRequest};
+use crate::models::{
+    User, Task, CreateTaskRequest, UpdateTaskRequest,
+    TasksByStatus, UserTaskStats, PredictionPoint, UserAvgTime,
+};
 use crate::errors::AppError;
 
 // ============ Users ============
@@ -123,24 +126,21 @@ pub async fn get_task_by_id(pool: &SqlitePool, id: i64) -> Result<Task, AppError
         .ok_or_else(|| AppError::NotFound("Task not found".to_string()))
 }
 
-pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<Task>, AppError> {
-    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks ORDER BY created_at DESC")
-        .fetch_all(pool)
-        .await?)
-}
-
-pub async fn get_tasks_by_status(pool: &SqlitePool, status: &str) -> Result<Vec<Task>, AppError> {
-    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC")
-        .bind(status)
-        .fetch_all(pool)
-        .await?)
+pub async fn get_all_active_tasks(pool: &SqlitePool) -> Result<Vec<Task>, AppError> {
+    Ok(sqlx::query_as::<_, Task>(
+        "SELECT * FROM tasks WHERE is_archived = 0 ORDER BY created_at DESC"
+    )
+    .fetch_all(pool)
+    .await?)
 }
 
 pub async fn get_tasks_by_assignee(pool: &SqlitePool, user_id: i64) -> Result<Vec<Task>, AppError> {
-    Ok(sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE assignee_id = ? ORDER BY created_at DESC")
-        .bind(user_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(sqlx::query_as::<_, Task>(
+        "SELECT * FROM tasks WHERE assignee_id = ? AND is_archived = 0 ORDER BY created_at DESC"
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?)
 }
 
 pub async fn update_task(
@@ -161,13 +161,11 @@ pub async fn update_task(
     };
 
     let new_status = req.status.as_ref().unwrap_or(&current.status);
-    
-    // Конвертируем часы в секунды
+
     let new_actual_seconds = req.actual_hours
         .map(|h| h * 3600.0)
         .or(current.actual_spent_seconds);
 
-    // Устанавливаем completed_at при переходе в done
     let new_completed_at = if new_status == "done" && current.status != "done" {
         Some(Utc::now())
     } else if new_status != "done" {
@@ -180,7 +178,7 @@ pub async fn update_task(
         r#"
         UPDATE tasks
         SET title = ?, description = ?, status = ?,
-            assignee_id = ?, actual_spent_seconds = ?, 
+            assignee_id = ?, actual_spent_seconds = ?,
             completed_at = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         RETURNING *
@@ -208,4 +206,135 @@ pub async fn delete_task(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
         return Err(AppError::NotFound("Task not found".to_string()));
     }
     Ok(())
+}
+
+pub async fn archive_completed_tasks(pool: &SqlitePool) -> Result<u64, AppError> {
+    let result = sqlx::query(
+        "UPDATE tasks SET is_archived = 1 WHERE status = 'done' AND is_archived = 0"
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+// ============ Analytics ============
+
+pub async fn get_tasks_by_status_counts(pool: &SqlitePool) -> Result<TasksByStatus, AppError> {
+    let rows: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT status, COUNT(*) FROM tasks WHERE is_archived = 0 GROUP BY status"
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut stats = TasksByStatus { todo: 0, in_progress: 0, done: 0 };
+    for (status, count) in rows {
+        match status.as_str() {
+            "todo" => stats.todo = count,
+            "in_progress" => stats.in_progress = count,
+            "done" => stats.done = count,
+            _ => {}
+        }
+    }
+    Ok(stats)
+}
+
+pub async fn get_tasks_by_user_counts(pool: &SqlitePool) -> Result<Vec<UserTaskStats>, AppError> {
+    let rows: Vec<(i64, String, String, i64)> = sqlx::query_as(
+        r#"
+        SELECT u.id, u.name, t.status, COUNT(*)
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.is_archived = 0
+        GROUP BY u.id, u.name, t.status
+        ORDER BY u.name
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut map: std::collections::HashMap<i64, UserTaskStats> = std::collections::HashMap::new();
+    for (uid, name, status, count) in rows {
+        let entry = map.entry(uid).or_insert(UserTaskStats {
+            user_id: uid,
+            user_name: name,
+            todo: 0,
+            in_progress: 0,
+            done: 0,
+        });
+        match status.as_str() {
+            "todo" => entry.todo = count,
+            "in_progress" => entry.in_progress = count,
+            "done" => entry.done = count,
+            _ => {}
+        }
+    }
+    Ok(map.into_values().collect())
+}
+
+pub async fn get_prediction_accuracy(pool: &SqlitePool) -> Result<Vec<PredictionPoint>, AppError> {
+    Ok(sqlx::query_as::<_, (i64, f64, f64)>(
+        r#"
+        SELECT id, predicted_seconds, actual_spent_seconds
+        FROM tasks
+        WHERE status = 'done'
+          AND predicted_seconds IS NOT NULL
+          AND actual_spent_seconds IS NOT NULL
+          AND actual_spent_seconds > 0
+        "#
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(id, pred, actual)| PredictionPoint {
+        task_id: id,
+        predicted_hours: pred / 3600.0,
+        actual_hours: actual / 3600.0,
+    })
+    .collect())
+}
+
+pub async fn get_avg_time_by_user(pool: &SqlitePool) -> Result<Vec<UserAvgTime>, AppError> {
+    Ok(sqlx::query_as::<_, (i64, String, f64, i64)>(
+        r#"
+        SELECT u.id, u.name,
+               AVG(t.actual_spent_seconds) / 3600.0,
+               COUNT(*)
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.status = 'done'
+          AND t.actual_spent_seconds IS NOT NULL
+          AND t.actual_spent_seconds > 0
+        GROUP BY u.id, u.name
+        "#
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(|(id, name, avg, count)| UserAvgTime {
+        user_id: id,
+        user_name: name,
+        avg_hours: avg,
+        task_count: count,
+    })
+    .collect())
+}
+
+pub async fn update_prediction(
+    pool: &SqlitePool,
+    id: i64,
+    predicted_seconds: Option<f64>,
+) -> Result<Task, AppError> {
+    sqlx::query_as::<_, Task>(
+        r#"
+        UPDATE tasks
+        SET predicted_seconds = ?
+        WHERE id = ?
+        RETURNING *
+        "#
+    )
+    .bind(predicted_seconds)
+    .bind(id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| e.into())
 }

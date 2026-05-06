@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # ============ Temporal Split ============
 
 def temporal_split(df, config):
-    """Разбивает по времени на train/val (production) или train/val/test (evaluation)."""
+    """Разбивает по времени на train/val (production) или train/val/test (evaluation)"""
     mode = config["runtime"]["mode"]
     n = len(df)
 
@@ -53,7 +53,7 @@ def temporal_split(df, config):
 # ============ Staged Search: Scratch ============
 
 def staged_search_scratch(train_df, val_df, config):
-    """Поэтапный подбор гиперпараметров для Scratch Ridge."""
+    """Поэтапный подбор гиперпараметров для Scratch Ridge"""
     scratch_cfg = config["scratch"]
 
     summaries_train = train_df["summary"].tolist()
@@ -127,10 +127,9 @@ def staged_search_scratch(train_df, val_df, config):
 # ============ Staged Search: Retrain ============
 
 def staged_search_retrain(source_df, train_df, val_df, config):
-    """Поэтапный подбор гиперпараметров для Retrain Ridge."""
+    """Поэтапный подбор гиперпараметров для Retrain Ridge"""
     retrain_cfg = config["retrain"]
 
-    # Тексты
     all_summaries = source_df["summary"].tolist() + train_df["summary"].tolist()
     all_descriptions = source_df["description"].tolist() + train_df["description"].tolist()
     summaries_val = val_df["summary"].tolist()
@@ -233,7 +232,7 @@ def staged_search_retrain(source_df, train_df, val_df, config):
 # ============ Model Selection ============
 
 def _is_better(new_metrics, current_best, config):
-    """Проверяет, лучше ли new_metrics чем current_best."""
+    """Проверяет, лучше ли new_metrics чем current_best"""
     if current_best is None:
         return True
 
@@ -252,7 +251,7 @@ def _is_better(new_metrics, current_best, config):
 
 
 def select_best(candidates, config):
-    """Выбирает лучшего кандидата из списка."""
+    """Выбирает лучшего кандидата из списка"""
     sel = config["selection"]
     primary = sel["primary_metric"]
 
@@ -274,7 +273,7 @@ def select_best(candidates, config):
 # ============ Refit ============
 
 def refit_model(candidate, target_full_df, source_df, config):
-    """Переобучает лучшую модель на всех доступных данных (train+val)."""
+    """Переобучает лучшую модель на всех доступных данных (train+val)"""
     family = candidate["family"]
 
     if family == "baseline":
@@ -323,7 +322,7 @@ def refit_model(candidate, target_full_df, source_df, config):
 # ============ Evaluate on Test ============
 
 def evaluate_on_test(candidate, test_df, config):
-    """Оценка на тестовом наборе (evaluation mode)."""
+    """Оценка на тестовом наборе (evaluation mode)"""
     if candidate["family"] == "baseline":
         y_test = np.log1p(test_df["actual_spent_minutes"].values)
         y_pred_log = candidate["model"].predict(len(test_df))
@@ -368,7 +367,7 @@ def is_significant_improvement(new_metrics, current_info, config):
 # ============ Main Pipeline ============
 
 def run_training(config):
-    """Основной pipeline обучения."""
+    """Основной pipeline обучения"""
     engine = get_engine(config)
     mode = config["runtime"]["mode"]
     target_project = config["runtime"].get("eval_target_project")

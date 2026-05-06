@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Task Time Predictor", lifespan=lifespan)
 
 
-# ============ Schemas ============
+# ============ Models ============
 
 class PredictRequest(BaseModel):
     summary: str

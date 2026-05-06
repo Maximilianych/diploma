@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class FeatureExtractor:
-    """TF-IDF векторизация summary, description и char n-grams."""
+    """TF-IDF векторизация summary, description и char n-grams"""
 
     def __init__(self, config):
         feat_cfg = config["features"]
@@ -51,7 +51,7 @@ class FeatureExtractor:
         )
 
     def transform_blocks(self, summaries, descriptions):
-        """Возвращает три отдельные sparse-матрицы (без весов)."""
+        """Возвращает три отдельные sparse-матрицы (без весов)"""
         combined = [s + " " + d for s, d in zip(summaries, descriptions)]
         X_s = self.summary_vec.transform(summaries)
         X_d = self.description_vec.transform(descriptions)
@@ -64,6 +64,6 @@ class FeatureExtractor:
 
 
 def combine_blocks(X_s, X_d, X_c, weights):
-    """Применяет веса к блокам и объединяет в одну матрицу."""
+    """Применяет веса к блокам и объединяет в одну матрицу"""
     ws, wd, wc = weights
     return hstack([ws * X_s, wd * X_d, wc * X_c], format="csr")

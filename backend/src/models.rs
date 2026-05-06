@@ -60,8 +60,9 @@ pub struct Task {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub is_archived: bool,
 }
-// Ответ для фронтенда с часами
+
 #[derive(Debug, Clone, Serialize)]
 pub struct TaskResponse {
     pub id: i64,
@@ -75,6 +76,7 @@ pub struct TaskResponse {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub is_archived: bool,
 }
 
 impl From<Task> for TaskResponse {
@@ -91,6 +93,7 @@ impl From<Task> for TaskResponse {
             created_at: task.created_at,
             updated_at: task.updated_at,
             completed_at: task.completed_at,
+            is_archived: task.is_archived,
         }
     }
 }
@@ -127,4 +130,68 @@ where
 pub struct AuthenticatedUser {
     pub id: i64,
     pub role: String,
+}
+
+// =========== Analytics ============
+
+#[derive(Debug, Serialize)]
+pub struct AnalyticsResponse {
+    pub tasks_by_status: TasksByStatus,
+    pub tasks_by_user: Vec<UserTaskStats>,
+    pub prediction_accuracy: Vec<PredictionPoint>,
+    pub avg_time_by_user: Vec<UserAvgTime>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TasksByStatus {
+    pub todo: i64,
+    pub in_progress: i64,
+    pub done: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserTaskStats {
+    pub user_id: i64,
+    pub user_name: String,
+    pub todo: i64,
+    pub in_progress: i64,
+    pub done: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PredictionPoint {
+    pub task_id: i64,
+    pub predicted_hours: f64,
+    pub actual_hours: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserAvgTime {
+    pub user_id: i64,
+    pub user_name: String,
+    pub avg_hours: f64,
+    pub task_count: i64,
+}
+
+// =========== ML ============
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MlStatusResponse {
+    pub active_model: Option<String>,
+    pub model_candidate_id: Option<i64>,
+    pub activated_at: Option<String>,
+    pub r2_val: Option<f64>,
+    pub medae_val: Option<f64>,
+    pub mdape_val: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MlRetrainResponse {
+    pub status: String,
+    pub run_id: i64,
+    pub best_model: Option<String>,
+    pub metrics_val: Option<serde_json::Value>,
+    pub metrics_test: Option<serde_json::Value>,
+    pub activated: bool,
+    pub message: Option<String>,
 }

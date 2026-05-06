@@ -3,8 +3,9 @@ use crate::auth;
 use crate::errors::AppError;
 use crate::ml_client::MlClient;
 use crate::models::{
-    AuthResponse, ChangePasswordRequest, CreateTaskRequest,
-    CreateUserRequest, LoginRequest, TaskResponse, UpdateTaskRequest, User,
+    AnalyticsResponse, AuthResponse, ChangePasswordRequest, CreateTaskRequest,
+    CreateUserRequest, LoginRequest, MlRetrainResponse, MlStatusResponse,
+    TaskResponse, UpdateTaskRequest, User,
 };
 use crate::repository;
 
@@ -47,7 +48,6 @@ pub async fn login(
     }
 
     let token = auth::create_token(user.id, &user.role, jwt_secret)?;
-
     Ok(AuthResponse { token, user })
 }
 
@@ -96,7 +96,6 @@ pub async fn create_task(
     req: CreateTaskRequest,
     created_by: i64,
 ) -> Result<TaskResponse, AppError> {
-    // ML-сервис возвращает секунды
     let predicted_seconds = ml_client
         .predict_time_safe(&req.title, req.description.as_deref())
         .await;
@@ -105,8 +104,13 @@ pub async fn create_task(
     Ok(task.into())
 }
 
-pub async fn get_all_tasks(pool: &SqlitePool) -> Result<Vec<TaskResponse>, AppError> {
-    let tasks = repository::get_all_tasks(pool).await?;
+pub async fn get_all_active_tasks(pool: &SqlitePool) -> Result<Vec<TaskResponse>, AppError> {
+    let tasks = repository::get_all_active_tasks(pool).await?;
+    Ok(tasks.into_iter().map(|t| t.into()).collect())
+}
+
+pub async fn get_my_tasks(pool: &SqlitePool, user_id: i64) -> Result<Vec<TaskResponse>, AppError> {
+    let tasks = repository::get_tasks_by_assignee(pool, user_id).await?;
     Ok(tasks.into_iter().map(|t| t.into()).collect())
 }
 
@@ -117,6 +121,7 @@ pub async fn get_task_by_id(pool: &SqlitePool, id: i64) -> Result<TaskResponse, 
 
 pub async fn update_task(
     pool: &SqlitePool,
+    ml_client: &MlClient,
     id: i64,
     req: UpdateTaskRequest,
 ) -> Result<TaskResponse, AppError> {
@@ -128,10 +133,53 @@ pub async fn update_task(
         }
     }
 
-    let task = repository::update_task(pool, id, &req).await?;
+    let needs_prediction = req.title.is_some() || req.description.is_some();
+
+    let mut task = repository::update_task(pool, id, &req).await?;
+
+    if needs_prediction {
+        let predicted_seconds = ml_client
+            .predict_time_safe(&task.title, task.description.as_deref())
+            .await;
+
+        if predicted_seconds.is_some() {
+            task = repository::update_prediction(pool, id, predicted_seconds).await?;
+        }
+    }
+
     Ok(task.into())
 }
 
 pub async fn delete_task(pool: &SqlitePool, id: i64) -> Result<(), AppError> {
     repository::delete_task(pool, id).await
+}
+
+pub async fn archive_completed(pool: &SqlitePool) -> Result<u64, AppError> {
+    repository::archive_completed_tasks(pool).await
+}
+
+// ============ Analytics ============
+
+pub async fn get_analytics(pool: &SqlitePool) -> Result<AnalyticsResponse, AppError> {
+    let tasks_by_status = repository::get_tasks_by_status_counts(pool).await?;
+    let tasks_by_user = repository::get_tasks_by_user_counts(pool).await?;
+    let prediction_accuracy = repository::get_prediction_accuracy(pool).await?;
+    let avg_time_by_user = repository::get_avg_time_by_user(pool).await?;
+
+    Ok(AnalyticsResponse {
+        tasks_by_status,
+        tasks_by_user,
+        prediction_accuracy,
+        avg_time_by_user,
+    })
+}
+
+// ============ ML Proxy ============
+
+pub async fn get_ml_status(ml_client: &MlClient) -> Result<MlStatusResponse, AppError> {
+    ml_client.get_status().await
+}
+
+pub async fn trigger_retrain(ml_client: &MlClient) -> Result<MlRetrainResponse, AppError> {
+    ml_client.trigger_retrain().await
 }

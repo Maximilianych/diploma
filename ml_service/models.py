@@ -4,7 +4,7 @@ from sklearn.metrics import r2_score
 
 
 def compute_metrics(y_true_minutes, y_pred_minutes):
-    """Метрики на оригинальной шкале (минуты)."""
+    """Метрики на оригинальной шкале (минуты)"""
     y_pred_minutes = np.maximum(y_pred_minutes, 0)
 
     r2 = float(r2_score(y_true_minutes, y_pred_minutes))
@@ -24,7 +24,7 @@ def compute_metrics(y_true_minutes, y_pred_minutes):
 
 
 class BaselineModel:
-    """Предсказывает медиану обучающей выборки."""
+    """Предсказывает медиану обучающей выборки"""
 
     def __init__(self):
         self.median_log = None
@@ -37,14 +37,14 @@ class BaselineModel:
 
 
 def train_ridge(X_train, y_train_log, alpha, sample_weight=None):
-    """Обучает Ridge и возвращает модель."""
+    """Обучает Ridge и возвращает модель"""
     model = Ridge(alpha=alpha)
     model.fit(X_train, y_train_log, sample_weight=sample_weight)
     return model
 
 
 def predict_and_evaluate(model, X_val, y_val_log):
-    """Предсказывает и считает метрики на оригинальной шкале."""
+    """Предсказывает и считает метрики на оригинальной шкале"""
     if hasattr(model, "predict"):
         y_pred_log = model.predict(X_val)
     else:

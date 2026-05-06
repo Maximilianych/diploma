@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Predictor:
-    """Загружает активную модель и делает предсказания."""
+    """Загружает активную модель и делает предсказания"""
 
     def __init__(self, config):
         self.config = config
@@ -18,7 +18,7 @@ class Predictor:
         self.reload()
 
     def reload(self):
-        """Перезагружает активную модель из БД и файловой системы."""
+        """Перезагружает активную модель из БД и файловой системы"""
         try:
             engine = get_engine(self.config)
             info = get_active_model_info(engine)
@@ -45,11 +45,7 @@ class Predictor:
             self.model_info = None
 
     def predict(self, summary: str, description: str | None = None) -> dict | None:
-        """Предсказывает время выполнения задачи.
-
-        Returns:
-            dict с predicted_seconds и model_type, или None если модель недоступна.
-        """
+        """Предсказывает время выполнения задачи"""
         if self.artifact is None:
             return None
 
@@ -67,7 +63,7 @@ class Predictor:
 
             pred_log = self.artifact["model"].predict(X)[0]
 
-        # Обратное преобразование: expm1 → минуты → секунды
+        # Обратное преобразование в минуты
         pred_minutes = float(np.expm1(pred_log))
 
         # Clamp

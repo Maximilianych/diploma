@@ -1,14 +1,14 @@
+use actix_web::{web, HttpRequest, HttpResponse};
+use sqlx::SqlitePool;
 use crate::auth;
 use crate::config::Config;
 use crate::errors::AppError;
 use crate::ml_client::MlClient;
 use crate::models::{
-    AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest, CreateUserRequest, LoginRequest,
-    UpdateTaskRequest,
+    AuthenticatedUser, ChangePasswordRequest, CreateTaskRequest, CreateUserRequest,
+    LoginRequest, UpdateTaskRequest,
 };
 use crate::services;
-use actix_web::{HttpRequest, HttpResponse, web};
-use sqlx::SqlitePool;
 
 fn extract_user(req: &HttpRequest, config: &Config) -> Result<AuthenticatedUser, AppError> {
     let header = req
@@ -58,6 +58,16 @@ pub async fn change_password(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Password changed"})))
 }
 
+pub async fn get_me(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let auth_user = extract_user(&http_req, &config)?;
+    let user = services::get_user_by_id(pool.get_ref(), auth_user.id).await?;
+    Ok(HttpResponse::Ok().json(user))
+}
+
 // ============ Users ============
 
 pub async fn create_user(
@@ -68,7 +78,6 @@ pub async fn create_user(
 ) -> Result<HttpResponse, AppError> {
     let user = extract_user(&http_req, &config)?;
     require_admin(&user)?;
-
     let new_user = services::create_user(pool.get_ref(), req.into_inner()).await?;
     Ok(HttpResponse::Created().json(new_user))
 }
@@ -102,25 +111,12 @@ pub async fn delete_user(
 ) -> Result<HttpResponse, AppError> {
     let user = extract_user(&http_req, &config)?;
     require_admin(&user)?;
-
     let user_id = path.into_inner();
-
     if user.id == user_id {
         return Err(AppError::BadRequest("Cannot delete yourself".to_string()));
     }
-
     services::delete_user(pool.get_ref(), user_id).await?;
     Ok(HttpResponse::NoContent().finish())
-}
-
-pub async fn get_me(
-    pool: web::Data<SqlitePool>,
-    config: web::Data<Config>,
-    http_req: HttpRequest,
-) -> Result<HttpResponse, AppError> {
-    let auth_user = extract_user(&http_req, &config)?;
-    let user = services::get_user_by_id(pool.get_ref(), auth_user.id).await?;
-    Ok(HttpResponse::Ok().json(user))
 }
 
 // ============ Tasks ============
@@ -133,13 +129,7 @@ pub async fn create_task(
     req: web::Json<CreateTaskRequest>,
 ) -> Result<HttpResponse, AppError> {
     let user = extract_user(&http_req, &config)?;
-    let task = services::create_task(
-        pool.get_ref(),
-        ml_client.get_ref(),
-        req.into_inner(),
-        user.id,
-    )
-    .await?;
+    let task = services::create_task(pool.get_ref(), ml_client.get_ref(), req.into_inner(), user.id).await?;
     Ok(HttpResponse::Created().json(task))
 }
 
@@ -149,7 +139,17 @@ pub async fn get_all_tasks(
     http_req: HttpRequest,
 ) -> Result<HttpResponse, AppError> {
     let _ = extract_user(&http_req, &config)?;
-    let tasks = services::get_all_tasks(pool.get_ref()).await?;
+    let tasks = services::get_all_active_tasks(pool.get_ref()).await?;
+    Ok(HttpResponse::Ok().json(tasks))
+}
+
+pub async fn get_my_tasks(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let user = extract_user(&http_req, &config)?;
+    let tasks = services::get_my_tasks(pool.get_ref(), user.id).await?;
     Ok(HttpResponse::Ok().json(tasks))
 }
 
@@ -167,12 +167,18 @@ pub async fn get_task(
 pub async fn update_task(
     pool: web::Data<SqlitePool>,
     config: web::Data<Config>,
+    ml_client: web::Data<MlClient>,
     http_req: HttpRequest,
     path: web::Path<i64>,
     req: web::Json<UpdateTaskRequest>,
 ) -> Result<HttpResponse, AppError> {
     let _ = extract_user(&http_req, &config)?;
-    let task = services::update_task(pool.get_ref(), path.into_inner(), req.into_inner()).await?;
+    let task = services::update_task(
+        pool.get_ref(),
+        ml_client.get_ref(),
+        path.into_inner(),
+        req.into_inner(),
+    ).await?;
     Ok(HttpResponse::Ok().json(task))
 }
 
@@ -185,6 +191,53 @@ pub async fn delete_task(
     let _ = extract_user(&http_req, &config)?;
     services::delete_task(pool.get_ref(), path.into_inner()).await?;
     Ok(HttpResponse::NoContent().finish())
+}
+
+pub async fn archive_completed(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let user = extract_user(&http_req, &config)?;
+    require_admin(&user)?;
+    let count = services::archive_completed(pool.get_ref()).await?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"archived": count})))
+}
+
+// ============ Analytics ============
+
+pub async fn get_analytics(
+    pool: web::Data<SqlitePool>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let _ = extract_user(&http_req, &config)?;
+    let analytics = services::get_analytics(pool.get_ref()).await?;
+    Ok(HttpResponse::Ok().json(analytics))
+}
+
+// ============ Admin ML ============
+
+pub async fn get_ml_status(
+    ml_client: web::Data<MlClient>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let user = extract_user(&http_req, &config)?;
+    require_admin(&user)?;
+    let status = services::get_ml_status(ml_client.get_ref()).await?;
+    Ok(HttpResponse::Ok().json(status))
+}
+
+pub async fn trigger_retrain(
+    ml_client: web::Data<MlClient>,
+    config: web::Data<Config>,
+    http_req: HttpRequest,
+) -> Result<HttpResponse, AppError> {
+    let user = extract_user(&http_req, &config)?;
+    require_admin(&user)?;
+    let result = services::trigger_retrain(ml_client.get_ref()).await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 // ============ Routes ============
@@ -204,8 +257,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             // Tasks
             .route("/tasks", web::post().to(create_task))
             .route("/tasks", web::get().to(get_all_tasks))
+            .route("/tasks/my", web::get().to(get_my_tasks))
             .route("/tasks/{id}", web::get().to(get_task))
             .route("/tasks/{id}", web::put().to(update_task))
-            .route("/tasks/{id}", web::delete().to(delete_task)),
+            .route("/tasks/{id}", web::delete().to(delete_task))
+            // Analytics
+            .route("/analytics", web::get().to(get_analytics))
+            // Admin
+            .route("/admin/archive", web::post().to(archive_completed))
+            .route("/admin/ml/status", web::get().to(get_ml_status))
+            .route("/admin/ml/retrain", web::post().to(trigger_retrain))
     );
 }

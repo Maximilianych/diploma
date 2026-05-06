@@ -1,6 +1,6 @@
 """
 Копирует задачи одного source-проекта в таблицу tasks
-для тестирования production flow.
+для тестирования production flow
 """
 import sys
 from sqlalchemy import text

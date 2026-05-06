@@ -11,7 +11,7 @@ pub fn LoginPage(on_login: WriteSignal<Option<User>>) -> impl IntoView {
 
     let submit = move |ev: web_sys::SubmitEvent| {
         ev.prevent_default();
-        
+
         let email_val = email.get();
         let password_val = password.get();
 
@@ -20,14 +20,9 @@ pub fn LoginPage(on_login: WriteSignal<Option<User>>) -> impl IntoView {
             set_error.set(None);
 
             match api::login(email_val, password_val).await {
-                Ok(auth) => {
-                    on_login.set(Some(auth.user));
-                }
-                Err(e) => {
-                    set_error.set(Some(e));
-                }
+                Ok(auth) => on_login.set(Some(auth.user)),
+                Err(e) => set_error.set(Some(e)),
             }
-
             set_loading.set(false);
         });
     };

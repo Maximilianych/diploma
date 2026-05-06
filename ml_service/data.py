@@ -15,7 +15,7 @@ def clean_text(val):
 
 
 def load_target_tasks(engine, config) -> pd.DataFrame:
-    """Загрузка завершённых задач из таблицы tasks."""
+    """Загрузка завершённых задач из таблицы tasks"""
     mode = config["runtime"]["mode"]
 
     if mode == "evaluation":
@@ -79,7 +79,7 @@ def _load_eval_target(engine, config) -> pd.DataFrame:
 
 
 def load_source_tasks(engine, config) -> pd.DataFrame:
-    """Загрузка source-корпуса из ml_source_tasks."""
+    """Загрузка source-корпуса из ml_source_tasks"""
     version = config["source_corpus"]["dataset_version"]
     mode = config["runtime"]["mode"]
 
