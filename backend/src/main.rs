@@ -11,6 +11,9 @@ mod models;
 mod repository;
 mod services;
 
+#[cfg(test)]
+mod tests;
+
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }

@@ -32,9 +32,14 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
         .is_ok())
 }
 
-pub fn create_token(user_id: i64, role: &str, secret: &str) -> Result<String, AppError> {
+pub fn create_token_with_duration(
+    user_id: i64,
+    role: &str,
+    secret: &str,
+    duration_hours: i64,
+) -> Result<String, AppError> {
     let expiration = Utc::now()
-        .checked_add_signed(Duration::hours(24))
+        .checked_add_signed(Duration::hours(duration_hours))
         .expect("valid timestamp")
         .timestamp();
 
@@ -50,6 +55,10 @@ pub fn create_token(user_id: i64, role: &str, secret: &str) -> Result<String, Ap
         &EncodingKey::from_secret(secret.as_bytes()),
     )
     .map_err(|e| AppError::Internal(format!("Failed to create token: {}", e)))
+}
+
+pub fn create_token(user_id: i64, role: &str, secret: &str) -> Result<String, AppError> {
+    create_token_with_duration(user_id, role, secret, 24)
 }
 
 pub fn verify_token(token: &str, secret: &str) -> Result<Claims, AppError> {
