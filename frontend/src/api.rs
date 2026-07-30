@@ -1,7 +1,7 @@
 use crate::models::*;
 use gloo_storage::{LocalStorage, Storage};
 
-const API_URL: &str = "http://localhost:8080/api";
+const API_URL: &str = "http://localhost:8888/api";
 const TOKEN_KEY: &str = "auth_token";
 
 pub fn get_token() -> Option<String> {

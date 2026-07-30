@@ -1,9 +1,9 @@
 
 database:
-  url: "sqlite:///../backend/data.db"
+  url: "sqlite:////app/db/data.db"
 
 storage:
-  artifact_dir: "./artifacts"
+  artifact_dir: "/app/artifacts"
 
 runtime:
   mode: "production"             # production | evaluation

@@ -1,29 +1,39 @@
-version: '3.8'
-
 services:
-  # --- Сервис 1: База Данных (PostgreSQL) ---
-  db:
-    image: postgres:15-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: diploma_db
+  backend: 
+    build: ./backend
     ports:
-      - "5432:5432"
+      - "8080:8080"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - db_data:/app/db
+    environment:
+      - DATABASE_URL=sqlite:db/data.db?mode=rwc
+      - HOST=0.0.0.0
+      - PORT=8080
+      - ML_SERVICE_URL=http://ml_service:8000
+      # Вот так делать не стоит
+      - JWT_SECRET=change-me-in-production
+      # И вот так не надо
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASSWORD=adminpass123
+      # Но пусть пока так будет
 
-  # --- Сервис 2: ML Микросервис (Python) ---
   ml_service:
-    build: 
-      context: ./ml_service
+    build: ./ml_service
+    depends_on:
+      - backend
     ports:
       - "8000:8000"
-    depends_on:
-      - db
     volumes:
-      - ./ml_service:/app
+      - db_data:/app/db
+      - ml_artifacts:/app/artifacts
+    
+  nginx:
+    build: ./frontend
+    ports:
+      - "8888:80"
+    depends_on:
+      - backend
 
 volumes:
-  postgres_data:
+  db_data:
+  ml_artifacts:
