@@ -1,0 +1,85 @@
+stages:
+  - lint
+  - test
+  - build
+
+backend_lint:
+  stage: lint
+  image: rust:bookworm
+  before_script:
+    - cd backend
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features
+  allow_failure: true
+
+frontend_lint:
+  stage: lint
+  image: rust:bookworm
+  before_script:
+    - cd frontend
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features
+  allow_failure: true
+
+ml_service_lint:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - cd ml_service
+    - pip install flake8
+    - pip install -r requirements.txt
+  script:
+    - flake8 .
+  allow_failure: true
+
+backend_test:
+  stage: test
+  image: rust:bookworm
+  before_script:
+    - cd backend
+  script:
+    - cargo test
+
+ml_service_test:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - cd ml_service
+    - pip install -r requirements.txt
+  script:
+    - pytest
+
+backend_build:
+  stage: build
+  image: rust:bookworm
+  before_script:
+    - cd backend
+  script:
+    - cargo build --release
+  artifacts:
+    paths:
+      - backend/target/release/backend
+    expire_in: 1 week
+
+frontend_build:
+  stage: build
+  image: rust:bookworm
+  before_script:
+    - cd frontend
+  # Вот это долго, пусть должно быть, но пусть пока так будет
+  script:
+    - curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+    - cargo binstall trunk
+    - rustup target add wasm32-unknown-unknown
+    - apt update && apt install nodejs npm -y
+    - npm install @tailwindcss/cli
+    - npm install @tailwindcss/oxide-linux-x64-gnu
+    - npm install @parcel/watcher
+    - npm install @parcel/watcher-linux-x64-glibc
+    - trunk build --release
+  artifacts:
+    paths:
+      - frontend/target/release/frontend
+    expire_in: 1 week

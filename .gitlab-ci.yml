@@ -1,0 +1,90 @@
+stages:
+  - lint
+  - test
+  - build
+
+# ============= LINT STAGE =============
+
+backend_lint:
+  stage: lint
+  image: rust:bookworm
+  before_script:
+    - cd backend
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features
+  allow_failure: true
+
+frontend_lint:
+  stage: lint
+  image: rust:bookworm
+  before_script:
+    - cd frontend
+    - rustup component add clippy
+  script:
+    - cargo clippy --all-targets --all-features
+  allow_failure: true
+
+ml_service_lint:
+  stage: lint
+  image: python:3.11-slim
+  before_script:
+    - cd ml_service
+    - pip install flake8
+  script:
+    - flake8 .
+  allow_failure: true
+
+# ============= TEST STAGE =============
+
+backend_test:
+  stage: test
+  image: rust:bookworm
+  before_script:
+    - cd backend
+  script:
+    - cargo test
+
+ml_service_test:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - cd ml_service
+    - pip install -r requirements.txt
+  script:
+    - pytest
+
+# ============= BUILD STAGE =============
+
+backend_build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t backend:$CI_COMMIT_SHORT_SHA ./backend
+    - docker tag backend:$CI_COMMIT_SHORT_SHA backend:latest
+  # artifacts:
+  #   paths:
+  #     - backend-image.tar
+  #   expire_in: 1 week
+  # after_script:
+  #   - docker save backend:latest -o backend-image.tar
+
+frontend_build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t frontend:$CI_COMMIT_SHORT_SHA ./frontend
+    - docker tag frontend:$CI_COMMIT_SHORT_SHA frontend:latest
+
+ml_service_build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t ml_service:$CI_COMMIT_SHORT_SHA ./ml_service
+    - docker tag ml_service:$CI_COMMIT_SHORT_SHA ml_service:latest
